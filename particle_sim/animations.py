@@ -33,8 +33,8 @@ class AnimationHandler:
             self.fig.set_size_inches(self.width, self.height)
             self.ax.set_aspect('equal')
         
-        primary_ax.set_xlim(self.polygon.bounds[0] - 1, self.polygon.bounds[2] + 1)
-        primary_ax.set_ylim(self.polygon.bounds[1] - 1, self.polygon.bounds[3] + 1)
+        primary_ax.set_xlim(self.polygon.bounds[0] - 0.1, self.polygon.bounds[2] + 0.1)
+        primary_ax.set_ylim(self.polygon.bounds[1] - 0.1, self.polygon.bounds[3] + 0.1)
         primary_ax.set_title(f'{self.n_bodies}-Body Simulation')
 
         if self.polygon is not None:
