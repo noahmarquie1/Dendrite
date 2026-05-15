@@ -3,6 +3,7 @@ from particle_sim.physics import PhysicsHandler
 from particle_sim.animations import AnimationHandler
 from scipy.integrate import RK45
 import matplotlib.pyplot as plt
+import shapely
 
 
 class PointCloudSolver:
@@ -19,6 +20,7 @@ class PointCloudSolver:
         self.force_multiplier = force_multiplier
         self.drag_coefficient = drag_coefficient
         self.scatter = plt.scatter(np.zeros((self.n_bodies, 1)), np.zeros((self.n_bodies, 1)), c='blue', marker='o')
+        self.polygon = polygon
 
         self.phys = PhysicsHandler(
             n_bodies = self.n_bodies,
@@ -26,7 +28,7 @@ class PointCloudSolver:
             drag_coefficient = self.drag_coefficient,
             width = self.width,
             height = self.height,
-            polygon=polygon,
+            polygon=self.polygon,
             deg=deg
         )
 
@@ -48,10 +50,20 @@ class PointCloudSolver:
 
     def generate_random_initial_state(self):
         rng = np.random.default_rng()
-        bounds = self.phys.polygon.bounds
+
+        mic_line = shapely.maximum_inscribed_circle(self.polygon)
+        radius = mic_line.length
+        center_x, center_y = mic_line.coords[0]
+        offset = radius / (2**0.5)  # R / sqrt(2)
+
+        min_x = center_x - offset
+        min_y = center_y - offset
+        max_x = center_x + offset
+        max_y = center_y + offset
+
         pos = rng.uniform(
-            [bounds[0] + 0.2, bounds[1] + 0.2], 
-            [bounds[2] - 0.2, bounds[3] - 0.2], 
+            [min_x + 0.2, min_y + 0.2], 
+            [max_x - 0.2, max_y - 0.2], 
             size=(self.n_bodies, 2)
         )
         random_deviation = np.random.uniform(-0.1, 0.1, size=(self.n_bodies, 2))

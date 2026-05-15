@@ -3,7 +3,7 @@ from shapely.geometry import Polygon
 import numpy as np
 
 DPI = 75
-N_BODIES = 4
+N_BODIES = 16
 DRAG_COEF = 40
 FPS = 15
 FORCE_MULTIPLIER = 1

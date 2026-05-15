@@ -21,13 +21,15 @@ class PhysicsHandler:
             polygon = Polygon([(0, 0), (width, 0), (width, height), (0, height)])
         
         self.polygon = polygon
-        sdf_grid, grad_x, grad_y = generate_sdf(polygon)
+        sdf_grid, grad_x, grad_y, min_p, max_p = generate_sdf(polygon)
 
         # JAX setup
         self.lj_kernel = jax.jit(jax.grad(self.lj_potential))
         self.sdf = jnp.array(sdf_grid)
         self.grad_x = jnp.array(grad_x)
         self.grad_y = jnp.array(grad_y)
+        self.min_p = min_p
+        self.max_p = max_p
 
 
     # Base Logic and Physics
@@ -41,11 +43,17 @@ class PhysicsHandler:
         return dir * mag
 
 
+    def smooth_clamp(self, force, max):
+        f_norm = np.linalg.norm(force)
+        clamped = force / np.sqrt(1.0 + (f_norm / max) ** 2)
+        return clamped
+
+
     def lj_potential(self, this, other):
-        r = jnp.linalg.norm(this - other)
-        attr = (r**2 + 1e-2) ** -6
-        rep = (r**2 + 1e-2) ** -2
-        return 4 * 4 * (0 - rep)
+        r2 = jnp.sum((this - other) ** 2)
+        attr = (r2 + 1e-2) ** -6
+        rep = (r2 + 1e-2) ** -2
+        return -4 * 4 * rep
 
 
     def lj_force(self, this, other):
@@ -64,10 +72,10 @@ class PhysicsHandler:
 
 
     def soft_wall_repulsion(self, this):
-        dist = sample_sdf(self.sdf, this)
+        dist = sample_sdf(grid=self.sdf, this=this, min_p=self.min_p, max_p=self.max_p)
 
-        nx = sample_sdf(this=this, grid=self.grad_x)
-        ny = sample_sdf(this=this, grid=self.grad_y)
+        nx = sample_sdf(grid=self.grad_x, this=this, min_p=self.min_p, max_p=self.max_p)
+        ny = sample_sdf(grid=self.grad_y, this=this, min_p=self.min_p, max_p=self.max_p)
         normal = jnp.array([nx, ny])
         
         mag = (10*dist + 1e-7) ** -6
