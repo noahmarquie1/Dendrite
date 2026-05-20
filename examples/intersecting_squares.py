@@ -6,10 +6,11 @@ from particle_sim.solver import PointCloudSolver
 
 # Define constants
 DPI = 75
-N_BODIES = 16
+N_BODIES = 10
 DRAG_COEF = 40
 FPS = 15
 FORCE_MULTIPLIER = 1
+VEL_THRESHOLD = 30 # NO EFFECT FOR NOW
 
 T = 6
 step = T * 1e-2
@@ -35,7 +36,7 @@ solver = PointCloudSolver(
     width=6,
     height=6,
     drag_coeff=DRAG_COEF,
-    plots=['pdf-anim', 'max-vel', 'pdf-final'],
+    plots=['pdf-anim', 'max-vel-dynamic', 'pdf-comparison'],
     polygon=composite_rect,
     fps=FPS,
     deg=2,
@@ -43,7 +44,7 @@ solver = PointCloudSolver(
 
 solver.solve(
     max_step=step, 
-    steps=int(1e2), 
+    steps=int(1), 
     out="anim.gif"
     #state0=state0
 )

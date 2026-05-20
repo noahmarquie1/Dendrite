@@ -17,8 +17,7 @@ def _calculate_pdf_data(mesh_points, approx_step, bin_amt):
     distances = distances.flatten()
     distances = distances[distances > 1e-8]
     
-    # 2. Vectorized Binning: Use np.histogram instead of slow Python loops
-    max_dist = approx_step * 2
+    max_dist = approx_step
     counts, _ = np.histogram(distances, bins=bin_amt, range=(0, max_dist))
     
     # Convert raw counts to probabilities
@@ -84,7 +83,7 @@ def plot_mesh_pdf(mesh_points, approx_step, bin_amt=20, ax=None, color="lightblu
         distances = np.append(distances, neighbor_distances[mask])
 
     total_samples = 0
-    bin_size = (approx_step * 2) / bin_amt
+    bin_size = (approx_step) / bin_amt
     bins = np.zeros(bin_amt)
     for dist in distances:
         for i in range(bin_amt):
@@ -92,17 +91,16 @@ def plot_mesh_pdf(mesh_points, approx_step, bin_amt=20, ax=None, color="lightblu
                 bins[i] += 1
                 total_samples += 1
 
-    # plot PDF
-    if ax is None:
-        ax = plt.gca()
-    
     probabilities = _calculate_pdf_data(mesh_points, approx_step, bin_amt)
     max_dist = approx_step * 2
     bin_size = max_dist / bin_amt
-    
     x_positions = np.arange(bin_amt) * bin_size
+
+    # plot PDF
+    if ax is None:
+        return x_positions, probabilities
+    
     bars = ax.bar(x_positions, probabilities, width=bin_size, color=color, edgecolor="black", align='edge')
-        
     if chart_details:
         ax.set_xlabel("Distance")
         ax.set_ylabel("Count")

@@ -10,6 +10,10 @@ class PhysicsHandler:
     def __init__(self, n_bodies, force_multiplier=100, drag_coefficient=0.01, deg=2, width=6, height=4, polygon: Polygon=None):
         self.n_bodies = n_bodies
         self.force_multiplier = force_multiplier
+
+        self.p_to_p_coeff = 1e3
+        self.wall_to_p_coeff = 20
+
         self.drag_coefficient = drag_coefficient
         self.width = width
         self.height = height
@@ -44,14 +48,13 @@ class PhysicsHandler:
 
     def lj_potential(self, this, other):
         r2 = jnp.sum((this - other) ** 2)
-        attr = (r2 + 1e-2) ** -6
         rep = (r2 + 1e-2) ** -2
-        return -4 * 4 * rep
+        return -4 * rep
 
 
     def lj_force(self, this, other):
         force = np.array(self.lj_kernel(this, other))
-        return force
+        return force * self.p_to_p_coeff
     
 
     def standard_wall_repulsion(self, this):

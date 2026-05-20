@@ -16,18 +16,34 @@ class Mesh:
 
         self.add_shape(polygon)
 
-    def hex_fill(self):
+    def hex_fill(self, step_size=None):
+        if step_size is None:
+            step_size = self.step_size
+
         max_radius = 0
         for point in self.edge_points:
             point_dist = np.linalg.norm(point)
             max_radius = max(max_radius, point_dist)
 
-        nx = int(max_radius / self.step_size) * 2
-        ny = int(max_radius / (self.step_size * np.sqrt(3) / 2)) * 2
-        hex_centers, _ = create_hex_grid(nx=nx, ny=ny, min_diam=self.step_size)
+        nx = int(max_radius / step_size) * 2
+        ny = int(max_radius / (step_size * np.sqrt(3) / 2)) * 2
+        nx = max(nx, 1)
+        ny = max(ny, 1)
+
+        hex_centers, _ = create_hex_grid(nx=nx, ny=ny, min_diam=step_size)
         mask = np.array([self.polygon.contains(Point(p)) for p in hex_centers])
         self.inner_points = hex_centers[mask]
         return self.inner_points
+    
+    def hex_fill_precise(self, n_bodies_ideal):
+        step_size = 3
+        hex_points = np.zeros((0,2))
+        while hex_points.shape[0] < n_bodies_ideal:
+            hex_points = self.hex_fill(step_size)
+            num = hex_points.shape[0]
+            step_size -= 0.01
+        return hex_points
+        
 
     def edge_fill(self):
         temp_vertices = np.append(self.edge_points, [self.edge_points[0]], axis=0)
@@ -52,7 +68,7 @@ class Mesh:
 
 # test code
 if __name__ == "__main__":
-    m = Mesh(Polygon([[0, 0], [1, 0], [1, 1], [0, 1]]), step_size=0.05)
+    m = Mesh(Polygon([[0, 0], [1, 0], [1, 1], [0, 1]]), step_size=0.2)
     m.add_shape(Polygon([[0, 0], [1, 0], [1, 1], [0, 1]]))
     m.add_shape(Polygon([[0.5, 0.5], [1.5, 0.5], [1.5, -0.5], [0.5, -0.5]]))
 

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from shapely.plotting import plot_polygon
 from shapely.geometry import Point
 from mesh_generation.stats import plot_mesh_pdf, update_mesh_pdf
+import seaborn as sns
 
 
 class Graphic:
@@ -18,7 +19,7 @@ class Graphic:
 
 
 class AnimationHandler:
-    def __init__(self, n_bodies=1, width=6, height=4, dpi=100, fps=30, plots=None, polygon=None):
+    def __init__(self, n_bodies=1, width=6, height=4, dpi=100, fps=30, plots=None, polygon=None, vel_threshold=2):
         self.n_bodies = n_bodies
         self.dpi = dpi
         self.fps = fps
@@ -31,10 +32,14 @@ class AnimationHandler:
 
         self.plots = plots # list - allows "pdf-anim", "pdf-final", "max-vel" (max 3 allowed)
         self.graphics = []
-        self.plot_interval = int(self.fps / 2)
+        self.plot_interval = int(self.fps / 4)
         self.primary_ax = self.configure_plot()
         self.mesh_pdf_bars = None
         self.approx_dist = max(self.width, self.height) / np.sqrt(n_bodies) # rough approximate of ideal distance - used for plotting
+
+        self.interval = 0
+        self.frames = 0
+        self.vel_threshold = vel_threshold
 
 
     def configure_plot(self):
@@ -51,8 +56,14 @@ class AnimationHandler:
             if 'pdf-final' in self.plots:
                 self.graphics.append(Graphic(anim=False, func=self.setup_pdf_final_graphic, ax=self.ax[positions[0][0], positions[0][1]]))
                 positions = positions[1:]
-            if 'max-vel' in self.plots:
-                self.graphics.append(Graphic(anim=False, func=self.setup_max_vel_graphic, ax=self.ax[positions[0][0], positions[0][1]]))
+            if 'max-vel-static' in self.plots:
+                self.graphics.append(Graphic(anim=False, func=self.setup_max_vel_static_graphic, ax=self.ax[positions[0][0], positions[0][1]]))
+                positions = positions[1:]
+            if 'max-vel-dynamic' in self.plots:
+                self.graphics.append(Graphic(anim=True, func=self.update_max_vel_dynamic_graphic, ax=self.ax[positions[0][0], positions[0][1]]))
+                positions = positions[1:]
+            if 'pdf-comparison' in self.plots:
+                self.graphics.append(Graphic(anim=False, func=self.setup_pdf_comparison_graphic, ax=self.ax[positions[0][0], positions[0][1]]))
                 positions = positions[1:]
 
         else:
@@ -86,8 +97,28 @@ class AnimationHandler:
             ax.set_ylim(0, 1)
             self.mesh_pdf_bars = mesh_pdf_bars
         else:
-            update_mesh_pdf(bars=self.mesh_pdf_bars, mesh_points=self.sol[idx, :self.n_bodies, :], approx_step=self.approx_dist)
+            update_mesh_pdf(bars=self.mesh_pdf_bars, mesh_points=self.sol[idx*self.interval, :self.n_bodies, :], approx_step=self.approx_dist)
                 
+
+    def update_max_vel_dynamic_graphic(self, setup: bool, ax, idx=None):
+        if setup and self.vel_threshold:
+            self.setup_max_vel_static_graphic(ax)
+            x = np.linspace(0, self.sol.shape[0], 2)
+            y = np.full_like(x, self.vel_threshold)
+            ax.fill_between(x, y, color="tab:blue", alpha=0.3)
+            ax.plot(x, y, color="black")
+            ax.scatter([0], [self.find_max_vel_at_idx(0)], c="red")
+        else:
+            scatter_point = ax.collections[1] # index of scatter point - after filled in box
+            max_vel = self.find_max_vel_at_idx(idx*self.interval)
+            point_color = 'green' if max_vel < self.vel_threshold else 'red'
+            scatter_point.set_facecolors([point_color])
+            scatter_point.set_offsets([[idx*self.interval, max_vel]])
+
+
+    def get_dist_at_idx(self, idx):
+        return plot_mesh_pdf(self.sol[idx, :self.n_bodies, :], approx_step=self.approx_dist) # will return x and y as arrays
+
 
     def setup_pdf_final_graphic(self, ax):
         ax.set_title("Final PDF")
@@ -97,28 +128,66 @@ class AnimationHandler:
         plot_mesh_pdf(self.sol[-1, :self.n_bodies, :], approx_step=self.approx_dist, ax=ax, color='lightblue', chart_details=False)
 
 
-    def setup_max_vel_graphic(self, ax):
+    def setup_pdf_comparison_graphic(self, ax):
+        ax.set_title("Initial v. Final PDF")
+        ax.set_xlabel("Distance")
+        ax.set_ylabel("Probability")
+        ax.set_ylim(0, 1)
+
+        # plot initial distribution
+        x, y = self.get_dist_at_idx(0)
+        sns.histplot(
+            x=x,
+            weights=y,
+            ax=ax,
+            bins=x.shape[0],
+            element='poly',
+            label="Initial",
+            color='red',
+            alpha=0.3,
+        )
+
+        # plot final distribution
+        x, y = self.get_dist_at_idx(-1)
+        sns.histplot(
+            x=x,
+            weights=y,
+            ax=ax,
+            bins=x.shape[0],
+            element='poly',
+            label="Final",
+            color='blue',
+            alpha=0.3,
+        )
+
+        # plot legend
+        ax.legend(loc="upper right")
+
+
+
+    def find_max_vel_at_idx(self, i):
+        vel_series = self.sol[i, self.n_bodies:, :]
+        vel_series = [np.linalg.norm(vel) for vel in vel_series]
+        max_vel = np.max(vel_series)
+        return max_vel
+
+
+    def setup_max_vel_static_graphic(self, ax):
         ax.set_title("Max Velocity vs. Time")
         ax.set_xlabel("Time")
         ax.set_ylabel("Velocity")
 
-        t = range(self.sol.shape[0])
-        max_vels = np.zeros_like(t)
-
-        for i in t:
-            vel_series = self.sol[i, self.n_bodies:, :]
-            vel_series = [np.linalg.norm(vel) for vel in vel_series]
-            max_vel = np.max(vel_series)
-            max_vels[i] = max_vel
-
+        t = range(self.frames)
+        max_vels = np.array([self.find_max_vel_at_idx(i*self.interval) for i in t])
+        t = np.array(t) * self.interval
         ax.plot(t, max_vels)
 
 
-    def _animate(self, i, interval):
-        positions = self.sol[i*interval, :self.n_bodies, :]
+    def _animate(self, i):
+        positions = self.sol[i*self.interval, :self.n_bodies, :]
         self.scatter.set_offsets(positions)
         self.info_text.set_text((
-            f"Step: {i*interval}/{len(self.sol)}, {i*interval/len(self.sol)*100:.1f}%\n"
+            f"Step: {i*self.interval}/{len(self.sol)}, {i*self.interval/len(self.sol)*100:.1f}%\n"
         ))
 
         if self.plots and i % self.plot_interval == 0:
@@ -133,6 +202,15 @@ class AnimationHandler:
         self.ax_map = {}
         self.scatter = self.primary_ax.scatter(solution[0, :self.n_bodies, 0], solution[0, :self.n_bodies, 1], c='blue', marker='o')
 
+        desired_length = 20
+        self.frames = int(desired_length * self.fps) - 1
+        self.interval = self.sol.shape[0] // self.frames
+        self.frames = self.sol.shape[0] // self.interval
+
+        if self.interval == 0: # handles edge case for small animations
+            self.interval = 1
+            self.frames = self.sol.shape[0]
+
         for graphic in self.graphics:
             if graphic.anim:
                 graphic.func(setup=True, idx=None)
@@ -145,20 +223,9 @@ class AnimationHandler:
             ha='right', va='top', fontsize=12,
             bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray')
         )
-        
-        desired_length = 20
-        frames = desired_length * self.fps
-        interval = int(self.sol.shape[0] / frames)
-
-        if interval == 0: # handles edge case for small animations
-            interval = 1
-            frames = self.sol.shape[0]
 
         format = self.out.split('.')[1]
-        if format == 'gif':
-            writer = 'pillow'
-        else:
-            writer = 'ffmpeg'
-        anim = FuncAnimation(self.fig, lambda i: self._animate(i, interval), frames=frames)
+        writer = 'pillow' if format == 'gif' else 'ffmpeg'
+        anim = FuncAnimation(self.fig, lambda i: self._animate(i), frames=self.frames)
         anim.save(filename=self.out, writer=writer, dpi=self.dpi, fps=self.fps)
         print(f"Animation saved as {self.out}.")

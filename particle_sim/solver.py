@@ -20,6 +20,8 @@ class PointCloudSolver:
         self.scatter = plt.scatter(np.zeros((self.n_bodies, 1)), np.zeros((self.n_bodies, 1)), c='blue', marker='o')
         self.polygon = polygon
 
+        self.vel_threshold = 2
+
         self.phys = PhysicsHandler(
             n_bodies = self.n_bodies, force_multiplier = self.force_multiplier,
             drag_coefficient = self.drag_coefficient, width = self.width,
@@ -28,7 +30,7 @@ class PointCloudSolver:
 
         self.anim = AnimationHandler(
             n_bodies=self.n_bodies, width=self.width, height=self.height,
-            polygon=polygon, dpi=self.dpi, plots=plots, fps=fps,
+            polygon=polygon, dpi=self.dpi, plots=plots, fps=fps, vel_threshold=self.vel_threshold
         )
 
 
@@ -60,6 +62,13 @@ class PointCloudSolver:
         vel = np.zeros((self.n_bodies, 2))
         state = np.concatenate((pos, vel))
         return state
+    
+
+    def find_max_vel_at_state(self, state):
+        vel_series = state[self.n_bodies:, :]
+        vel_series = [np.linalg.norm(vel) for vel in vel_series]
+        max_vel = np.max(vel_series)
+        return max_vel
 
 
     def calculate_derivatives(self, state):
@@ -101,10 +110,28 @@ class PointCloudSolver:
         for i in range(steps):
             if (i + 1) % (steps / 10) == 0:
                 print(f"Completed {i + 1}/{steps} steps. {(i+1)/steps*100:.1f}% complete.")
+
             solver.step()
             y = solver.y.reshape(state0.shape)
             self.solution[i] = y
 
+            if (i + 1) % int(steps / 100) == 0:
+                vel_series = self.solution[i, self.n_bodies:, :]
+                vel_series = [np.linalg.norm(vel) for vel in vel_series]
+                max_vel = np.max(vel_series)
+                if max_vel <= self.vel_threshold:
+                    all_below = True
+                    for iter in range(i - 4, i + 1):
+                        iter = max(0, iter)
+                        if self.find_max_vel_at_state(self.solution[iter]) > self.vel_threshold:
+                            all_below = False
+                    
+                    if all_below:
+                        print(f"Convergence Reached ({i+1}/{steps})")
+                        self.solution = self.solution[:(i+1)]
+                        return self.solution
+
+        print("Solution did not converge")
         return self.solution
 
 

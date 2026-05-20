@@ -1,10 +1,11 @@
 from particle_sim.solver import PointCloudSolver
 from shapely.geometry import Polygon
+from mesh_generation.mesh import Mesh
 import numpy as np
 
 DPI = 75
-N_BODIES = 16
-DRAG_COEF = 40
+N_BODIES = 50
+DRAG_COEF = 100
 FPS = 15
 FORCE_MULTIPLIER = 1
 
@@ -13,11 +14,20 @@ step = T * 1e-2
 
 vertices = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
 square_polygon = Polygon(vertices)
-starting_points = np.array([
-    [0.09, 0.09], [0.1, 0.1], [0.11, 0.11], [0.12, 0.12]
+
+# make a hexagonal initial distribution
+square_mesh = Mesh(square_polygon)
+hex_points = square_mesh.hex_fill_precise(n_bodies_ideal=N_BODIES)
+hex_points *= 0.95 # Protection against points on edge
+
+N_POINTS_ACTUAL = hex_points.shape[0]
+print(N_POINTS_ACTUAL)
+
+state0 = np.vstack([
+    hex_points, 
+    np.random.uniform(low=-1000.0, high=1000.0, size=hex_points.shape),
 ])
-vel = np.random.random((vertices.shape[0], 2))
-state0 = np.concatenate((starting_points, vel))
+
 
 solver = PointCloudSolver(
     dpi=DPI,
@@ -26,7 +36,7 @@ solver = PointCloudSolver(
     width=6,
     height=6,
     drag_coeff=DRAG_COEF,
-    plots=['pdf-anim', 'max-vel', 'pdf-final'],
+    plots=['pdf-anim', 'max-vel-dynamic', 'pdf-comparison'],
     polygon=square_polygon,
     fps=FPS,
     deg=2,
@@ -34,8 +44,9 @@ solver = PointCloudSolver(
 
 solver.solve(
     max_step=step, 
-    steps=int(100), 
-    #state0=state0
+    steps=int(2e3), 
+    out="./animation.mp4",
+    state0=state0,
 )
 solver.animate()
 
