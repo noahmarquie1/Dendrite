@@ -1,10 +1,11 @@
 from particle_sim.solver import PointCloudSolver
+from particle_sim.diffrax_solver import DiffraxSolver
 from shapely.geometry import Polygon
 from mesh_generation.mesh import Mesh
 import numpy as np
 
 DPI = 75
-N_BODIES = 50
+N_BODIES = 30
 DRAG_COEF = 100
 FPS = 15
 FORCE_MULTIPLIER = 1
@@ -20,8 +21,8 @@ square_mesh = Mesh(square_polygon)
 hex_points = square_mesh.hex_fill_precise(n_bodies_ideal=N_BODIES)
 hex_points *= 0.95 # Protection against points on edge
 
-N_POINTS_ACTUAL = hex_points.shape[0]
-print(N_POINTS_ACTUAL)
+N_BODIES_ACTUAL = hex_points.shape[0]
+print(N_BODIES_ACTUAL)
 
 state0 = np.vstack([
     hex_points, 
@@ -29,14 +30,14 @@ state0 = np.vstack([
 ])
 
 
-solver = PointCloudSolver(
+solver = DiffraxSolver(
     dpi=DPI,
-    n_bodies=N_BODIES,
+    n_bodies=3,
     force_multiplier=FORCE_MULTIPLIER,
     width=6,
     height=6,
     drag_coeff=DRAG_COEF,
-    plots=['pdf-anim', 'max-vel-dynamic', 'pdf-comparison'],
+    plots=None,
     polygon=square_polygon,
     fps=FPS,
     deg=2,
@@ -44,9 +45,9 @@ solver = PointCloudSolver(
 
 solver.solve(
     max_step=step, 
-    steps=int(2e3), 
+    steps=int(500), 
     out="./animation.mp4",
-    state0=state0,
+    #state0=state0,
 )
 solver.animate()
 

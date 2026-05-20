@@ -1,7 +1,2 @@
-from setuptools import setup, find_packages
-
-setup(
-    name='point_clouds',
-    version='0.1',
-    packages=find_packages(),
-)
+from setuptools import setup
+setup()
