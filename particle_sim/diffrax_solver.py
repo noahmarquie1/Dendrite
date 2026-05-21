@@ -6,13 +6,18 @@ from particle_sim.physics import PhysicsHandler
 from particle_sim.geometry import generate_sdf, sample_sdf
 from scipy.integrate import RK45
 
+# CONSTANTS
+DRAG_COEFF = 100
 
 # JAX-Optimized Forces
 @jax.jit
 def inter_point_repulsion(delta):
         r2 = jnp.sum(delta ** 2)
         rep = (r2 + 1e-2) ** -3 # Without the sqrt(), this acts as a force with 6 exponent (highly dissipative)
-        return rep * delta
+
+        norm = jnp.linalg.norm(delta)
+        dir = jnp.where(norm > 1e-8, delta / norm, jnp.zeros_like(delta))
+        return rep * dir
 
 @jax.jit
 def soft_wall_repulsion(this, sdf, grad_x, grad_y, min_p, max_p):
@@ -22,8 +27,13 @@ def soft_wall_repulsion(this, sdf, grad_x, grad_y, min_p, max_p):
     normal = jnp.array([nx, ny])
         
     mag = (dist + 1e-2) ** -6
-    force = -mag * normal
+    force = -mag * normal * (1/20)
     return force
+
+@jax.jit
+def drag(vel):
+    speed = jnp.linalg.norm(vel)
+    return -DRAG_COEFF * vel * speed
 
 
 class DiffraxSolver(PointCloudSolver):
@@ -42,8 +52,9 @@ class DiffraxSolver(PointCloudSolver):
         point_force = lambda v: inter_point_repulsion(v)
         wall_force = lambda v: soft_wall_repulsion(v, sdf, grad_x, grad_y, min_p, max_p)
 
-        self.point_vmap = jax.vmap(point_force)
+        self.point_vmap = jax.vmap(jax.vmap(point_force))
         self.wall_vmap = jax.vmap(wall_force)
+        self.drag_vmap = jax.vmap(drag)
 
 
     def generate_random_initial_state(self):
@@ -51,7 +62,7 @@ class DiffraxSolver(PointCloudSolver):
         return jnp.array(state)
     
 
-    def calculate_derivatives(self, state): # State should be a JAX Array
+    def calculate_derivatives(self, state): 
         state = state.reshape(-1, 2)
         num_bodies = int(state.shape[0] / 2)
         pos_i = state[:num_bodies]
@@ -61,8 +72,10 @@ class DiffraxSolver(PointCloudSolver):
         delta = pos_i[:, None, :] - pos_i[None, :, :]
         p_forces = self.point_vmap(delta)
         p_forces = jnp.sum(p_forces, axis=1) / 2
+
         w_forces = self.wall_vmap(pos_i)
-        total_force = p_forces + w_forces
+        drag = self.drag_vmap(vel_i)
+        total_force = p_forces + w_forces + drag
 
         # Combine with velocity and flatten
         return jnp.vstack([vel_i, total_force]).flatten()
@@ -75,6 +88,7 @@ class DiffraxSolver(PointCloudSolver):
 
         self.solution = np.zeros((steps, state0.shape[0], state0.shape[1]))
         func = jax.jit(lambda _,y: self.calculate_derivatives(y))
+        #func = lambda _,y: self.calculate_derivatives(y)
         solver = RK45(func, 0, y0=y0, t_bound=max_step * (steps + 1), max_step=max_step)
 
         if out:

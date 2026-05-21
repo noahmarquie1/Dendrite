@@ -5,7 +5,7 @@ from mesh_generation.mesh import Mesh
 import numpy as np
 
 DPI = 75
-N_BODIES = 30
+N_BODIES = 1000
 DRAG_COEF = 100
 FPS = 15
 FORCE_MULTIPLIER = 1
@@ -32,7 +32,7 @@ state0 = np.vstack([
 
 solver = DiffraxSolver(
     dpi=DPI,
-    n_bodies=3,
+    n_bodies=N_BODIES,
     force_multiplier=FORCE_MULTIPLIER,
     width=6,
     height=6,
@@ -45,7 +45,7 @@ solver = DiffraxSolver(
 
 solver.solve(
     max_step=step, 
-    steps=int(500), 
+    steps=int(1e3), 
     out="./animation.mp4",
     #state0=state0,
 )
