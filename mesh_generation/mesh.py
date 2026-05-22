@@ -13,8 +13,8 @@ class Mesh:
         self.edge_points = np.zeros((0, 2))
         self.polygon = polygon
         self.step_size = step_size
-
         self.add_shape(polygon)
+
 
     def hex_fill(self, step_size=None):
         if step_size is None:
@@ -34,28 +34,18 @@ class Mesh:
         mask = np.array([self.polygon.contains(Point(p)) for p in hex_centers])
         self.inner_points = hex_centers[mask]
         return self.inner_points
-    
-    def hex_fill_precise(self, n_bodies_ideal):
-        step_size = 3
-        hex_points = np.zeros((0,2))
-        while hex_points.shape[0] < n_bodies_ideal:
-            hex_points = self.hex_fill(step_size)
-            num = hex_points.shape[0]
-            step_size -= 0.01
-        return hex_points
-        
 
-    def edge_fill(self):
-        temp_vertices = np.append(self.edge_points, [self.edge_points[0]], axis=0)
-        for i in range(len(temp_vertices) - 1):
-            line = make_line(temp_vertices[i], temp_vertices[i+1], step_size=self.step_size)
-            self.edge_points = np.append(self.edge_points, line, axis=0)
+    def edge_fill(self, poly: Polygon):
+        edge_vertices = np.array(poly.exterior.coords)
+        edge_points = edge_vertices
+        for i in range(len(edge_vertices) - 1):
+            line = make_line(edge_vertices[i], edge_vertices[i+1], step_size=self.step_size)
+            edge_points = np.vstack([edge_points, line])
+        return edge_points
 
-    def add_shape(self, polygon):
-        self.edge_points = np.array([v for v in self.edge_points if not polygon.contains(Point(v))])
-        self.polygon = unary_union([self.polygon, polygon])
-        self.edge_points = self.polygon.exterior.coords
-        self.edge_fill()
+    def add_shape(self, poly):
+        self.polygon = unary_union([self.polygon, poly])
+        self.edge_points = self.edge_fill(self.polygon)
         self.hex_fill()
 
     def visualize(self, ax=None):

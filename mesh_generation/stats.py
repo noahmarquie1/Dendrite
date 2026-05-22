@@ -7,7 +7,7 @@ from mesh_generation.geometry import fetch_neighbors
 
 
 def _calculate_pdf_data(mesh_points, approx_step, bin_amt):
-    mesh_tree = KDTree(mesh_points, boxsize=[1.0, 1.0])
+    mesh_tree = KDTree(mesh_points)
     distances, _ = mesh_tree.query(mesh_points, k=9)
     
     distances = distances.flatten()

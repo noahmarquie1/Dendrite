@@ -28,7 +28,7 @@ class AnimationHandler:
         self.height = height
         self.scatter = None
         self.sol = np.empty((0, n_bodies, 2))
-        self.out = "/animation.mp4"
+        self.out = "./animation.mp4"
 
         self.plots = plots # list - allows "pdf-anim", "pdf-final", "max-vel" (max 3 allowed)
         self.graphics = []
@@ -81,6 +81,17 @@ class AnimationHandler:
 
         return primary_ax
     
+
+    def add_static_points(self, points: np.ndarray, color="blue"):
+        min_x = min(min(points[:, 0]) - 0.1, self.polygon.bounds[0] - 0.1)
+        max_x = max(max(points[:, 0]) + 0.1, self.polygon.bounds[2] - 0.1)
+        min_y = min(min(points[:, 1]) - 0.1, self.polygon.bounds[1] - 0.1)
+        max_y = max(max(points[:, 1]) + 0.1, self.polygon.bounds[3] - 0.1)
+
+        self.primary_ax.set_xlim(min_x, max_x)
+        self.primary_ax.set_ylim(min_y, max_y)
+        self.primary_ax.scatter(points[:, 0], points[:, 1], c=color)
+
 
     def update_pdf_anim_graphic(self, setup: bool, ax, idx=None):
         if setup:
@@ -197,10 +208,10 @@ class AnimationHandler:
         return self.scatter,
 
 
-    def animate(self, solution):
+    def animate(self, solution, color="blue"):
         self.sol = solution
         self.ax_map = {}
-        self.scatter = self.primary_ax.scatter(solution[0, :self.n_bodies, 0], solution[0, :self.n_bodies, 1], c='blue', marker='o')
+        self.scatter = self.primary_ax.scatter(solution[0, :self.n_bodies, 0], solution[0, :self.n_bodies, 1], c=color, marker='o')
 
         desired_length = 20
         self.frames = int(desired_length * self.fps) - 1

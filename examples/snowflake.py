@@ -1,14 +1,16 @@
 from mesh_generation.snowflake_mesh import generate_full_snowflake
 from particle_sim.solver import PointCloudSolver
-import numpy as np
+from data.poly_management import load_polygon, save_polygon
+from mesh_generation.mesh import Mesh
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
 
-N_BODIES = 16
+N_BODIES = 100
 FORCE_MULTIPLIER = 10
 DPI = 75
 DRAG_COEF = 2
 
 snowflake_mesh = generate_full_snowflake(1, 2, 3, 0.1)
-
 width = snowflake_mesh.polygon.bounds[2] - snowflake_mesh.polygon.bounds[0]
 height = snowflake_mesh.polygon.bounds[3] - snowflake_mesh.polygon.bounds[1]
 
@@ -24,11 +26,9 @@ solver = PointCloudSolver(
     polygon=snowflake_mesh.polygon,
 )
 
-solver.solve(
-    max_step=step,
-    steps=600, 
-    out="anim.gif"
-    #state0=state0 # optional, specifies hexagonal initial state
+sol = solver.solve(
+    max_step=step, 
+    steps=int(1e3), 
 )
-solver.animate()
 
+solver.animate(out="./anim.gif")

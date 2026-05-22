@@ -1,4 +1,4 @@
-# Snowflake ❄️
+# Dendrite ❄️
 
 By Noah Marquie as part of the UBC Mathematics Anthony Wachs Research Group.
 

@@ -1,7 +1,0 @@
-matplotlib
-numpy
-scipy
-seaborn
-hexalattice
-shapely==2.1.2
-jax

@@ -1,5 +1,49 @@
 import numpy as np
-from scipy.spatial import Delaunay, KDTree
+from scipy.spatial import KDTree, Delaunay
+from scipy.ndimage import distance_transform_edt
+from jax.scipy.ndimage import map_coordinates
+import shapely
+from shapely import Geometry
+
+def generate_sdf(geometry: Geometry, res=256):
+    x_min, y_min, x_max, y_max = geometry.bounds
+    min_p = min(x_min, y_min) - 2
+    max_p = max(x_max, y_max) + 2
+
+
+    x = np.linspace(min_p, max_p, res)
+    y = np.linspace(min_p, max_p, res)
+    xv, yv = np.meshgrid(x, y)
+
+    points = shapely.points(xv, yv)
+    mask = shapely.contains(geometry, points)
+    total_span = max_p - min_p
+    dx = total_span / (res - 1)
+
+    dist_outside = distance_transform_edt(~mask, sampling=dx)
+    dist_inside = distance_transform_edt(mask, sampling=dx)
+    sdf_grid = dist_outside - dist_inside
+    
+    grad_y, grad_x = np.gradient(sdf_grid, dx)
+    
+    return sdf_grid, grad_x, grad_y, min_p, max_p
+
+
+def sample_sdf(grid, this, min_p, max_p):
+    res = grid.shape[0]
+    iy = ((this[1] - min_p) / (max_p - min_p)) * (res - 1)
+    ix = ((this[0] - min_p) / (max_p - min_p)) * (res - 1)
+    return map_coordinates(input=grid, coordinates=(iy, ix), order=1, mode='nearest')
+
+
+def in_area(p, s):
+    tri = Delaunay(s)
+    return tri.find_simplex(p) >= 0
+
+
+def remove_in_area_points(points, s):
+    inside = np.array([in_area(p, s) for p in points])
+    return points[~inside]
 
 
 def make_line(p1, p2, step_size):
@@ -33,36 +77,6 @@ def make_square_edges(s, step_size):
     return total_points
 
 
-def in_area(p, s):
-    tri = Delaunay(s)
-    return tri.find_simplex(p) >= 0
-
-
-def on_edge(p, start, end):
-    # collinearity check
-    v1 = p - start
-    v2 = end - start
-    cross = v1[0]*v2[1] - v2[0]*v1[1]
-
-    # check if in line segment
-    v1_len_squared = v1 @ v1
-    v2_len_squared = v2 @ v2
-    return (abs(cross) < 1e-8) and (-1e-8 < v1_len_squared < v2_len_squared + 1e-8)
-
-
-def on_square_edge(p, s):
-    s = np.append(s, [s[0]], axis=0)
-    for i in range(s.shape[0] - 1):
-        if on_edge(p, s[i], s[i+1]):
-            return True
-    return False
-
-
-def remove_in_area_points(points, s):
-    inside = np.array([in_area(p, s) and not on_square_edge(p, s) for p in points])
-    return points[~inside]
-
-
 def fill_in_square(s, step_size):
     # travel from edge 1 to edge 3, using known length and direction of edge 4
     start_points = make_line(s[0], s[1], step_size)
@@ -70,14 +84,6 @@ def fill_in_square(s, step_size):
     for point in start_points:
         in_area_points = np.append(in_area_points, make_line(point, point + (s[3] - s[0]), step_size), axis=0)
     return in_area_points
-
-
-def fill_in_squares(s1, s2, step_size):
-    s1_inner_points = fill_in_square(s1, step_size)
-    s2_inner_points = fill_in_square(s2, step_size)
-    s2_inner_points = remove_in_area_points(s2_inner_points, s1)
-    total_inner_points = np.append(s1_inner_points, s2_inner_points, axis=0)
-    return total_inner_points
 
 
 def fetch_neighbors(p, mesh_points, n):
