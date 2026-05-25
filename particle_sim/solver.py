@@ -15,7 +15,7 @@ DRAG_COEFF = 100
 @jax.jit
 def inter_point_repulsion(delta):
         r2 = jnp.sum(delta ** 2)
-        rep = (r2 + 1e-2) ** -3 # Without the sqrt(), this acts as a force with 6 exponent (highly dissipative)
+        rep = (r2 + 1e-7) ** -3 # Without the sqrt(), this acts as a force with 6 exponent (highly dissipative)
 
         norm = jnp.linalg.norm(delta)
         dir = jnp.where(norm > 1e-8, delta / norm, jnp.zeros_like(delta))
@@ -27,9 +27,10 @@ def soft_wall_repulsion(this, sdf, grad_x, grad_y, min_p, max_p):
     nx = sample_sdf(grid=grad_x, this=this, min_p=min_p, max_p=max_p)
     ny = sample_sdf(grid=grad_y, this=this, min_p=min_p, max_p=max_p)
     normal = jnp.array([nx, ny])
-        
-    mag = (dist + 1e-2) ** -6
-    force = -mag * normal * (1/20)
+
+    dist_sq = dist ** 2    
+    mag = (dist_sq + 1e-7) ** -3
+    force = -mag * normal
     return force
 
 @jax.jit

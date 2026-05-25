@@ -11,6 +11,24 @@ This repository is a package to create 2D point clouds to fill in arbitrary poly
 
 <img src="preview.gif" width="40%" height="40%" style="max-width: 300px" alt="Solver on simple cube.">
 
+## Installation and Usage
+
+Use the following two commands to install Dendrite.
+
+```
+git clone https://github.com/noahmarquie1/dendrite.git
+pip install -e .
+```
+
+To generate a mesh, use the following command.
+
+```
+dendrite gen --static-poly {PATH} --dynamic-poly {PATH} --anim {WRITE_PATH} --csv {WRITE_PATH} --png {WRITE_PATH}
+```
+
+For optional flags anim, csv, and png, either a directory or full path is accepted.
+
+
 ## Tech Stack
 
 - Language: Python 3.12
