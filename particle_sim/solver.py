@@ -94,14 +94,15 @@ class PointCloudSolver:
         max_y = center_y + offset
 
         pos = rng.uniform(
-            [min_x + 0.2, min_y + 0.2], 
-            [max_x - 0.2, max_y - 0.2], 
+            [min_x, min_y], 
+            [max_x, max_y], 
             size=(self.n_bodies, 2)
         )
-        random_deviation = np.random.uniform(-0.1, 0.1, size=(self.n_bodies, 2))
-        pos += random_deviation
 
         vel = np.zeros((self.n_bodies, 2))
+        random_deviation = np.random.uniform(-0.1, 0.1, size=(self.n_bodies, 2))
+        vel += random_deviation
+
         state = np.concatenate((pos, vel))
         return jnp.array(state)
     
