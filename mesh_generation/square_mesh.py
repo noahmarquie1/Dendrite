@@ -1,7 +1,7 @@
 import numpy as np
 import shapely
 from shapely import Polygon, Point, LineString
-from shapely.plotting import plot_polygon
+from shapely.plotting import plot_polygon, plot_points
 import matplotlib.pyplot as plt
 from particle_sim.solver import PointCloudSolver
 import jax.numpy as jnp
@@ -162,12 +162,13 @@ class Square:
                 opposite_edge = self.opposite_edges[edge]
                 opposite_point = opposite_edge.total_linestring.interpolate(opposite_edge.total_linestring.project(point))
                 opposite_edge.add_point(opposite_point)
+                line_points = np.append(line_points, np.array([edge.linestrings[0].coords[0]]), axis=0)
 
                 for linestring in edge.linestrings:
                     start = np.array(linestring.coords)[0]
                     end = np.array(linestring.coords)[1]
                     n_step = max(2, round(np.linalg.norm(end - start) / self.step_size))
-                    line_seg = np.linspace(start, end, n_step)
+                    line_seg = np.linspace(start, end, n_step)[1:] # UPDATE THIS CODE TO REMOVE DUPLICATES
                     line_points = np.append(line_points, line_seg, axis=0)
 
                 setattr(self, self.axes[edge], line_points)
@@ -186,8 +187,8 @@ class StaticRegion:
         self.points = points
 
 
-    def visualize(self):
-        plt.scatter(self.points[:, 0], self.points[:, 1])
+    def visualize(self, ax):
+        ax.scatter(self.points[:, 0], self.points[:, 1], alpha=0.5)
 
 
 class DynamicRegionSolver(PointCloudSolver):
@@ -198,42 +199,48 @@ class DynamicRegionSolver(PointCloudSolver):
 
     def calculate_derivatives(self, state):
         state = state.reshape(-1, 2)
-        num_bodies = int(state.shape[0] / 2)
-        pos_i = state[:num_bodies]
+        n_bodies = int(state.shape[0] / 2)
+        pos_i = state[:n_bodies]
         pos_i = jnp.vstack([pos_i, self.region.boundary_points])
 
-        vel_i = state[num_bodies:]
+        vel_i = state[n_bodies:]
 
         # Apply forces through vectorized transformations
         delta = pos_i[:, None, :] - pos_i[None, :, :]
         p_forces = self.point_vmap(delta)
         p_forces = jnp.sum(p_forces, axis=1) / 2
-        p_forces = p_forces[:num_bodies]
+        p_forces = p_forces[:n_bodies]
 
+
+        w_forces = self.wall_vmap(pos_i)[:n_bodies]
         drag = self.drag_vmap(vel_i)
-        total_force = p_forces + drag
+        total_force = p_forces + drag + w_forces
 
         # Combine with velocity and flatten
         return jnp.vstack([vel_i, total_force]).flatten()
 
 
 class DynamicRegion:
-    def __init__(self, boundary_points, mesh):
+    def __init__(self, boundary_points, n_bodies):
         self.boundary_points = boundary_points
-        self.mesh = mesh
-        self.solver = DynamicRegionSolver(polygon=mesh, n_bodies=20, region=self)
+        self.mesh = shapely.convex_hull(Polygon(boundary_points))
+        self.n_bodies = n_bodies
+        self.solver = DynamicRegionSolver(polygon=self.mesh, n_bodies=self.n_bodies, region=self)
+        self.filled_points = None
 
 
     def visualize(self):
-        plt.scatter(self.boundary_points[:, 0], self.boundary_points[:, 1])
-        #plot_polygon(self.mesh)
+        plt.close()
+        plt.scatter(self.boundary_points[:, 0], self.boundary_points[:, 1], c='red')
+        plt.scatter(self.filled_points[:, 0], self.filled_points[:, 1], c='blue')
+        plot_polygon(self.mesh)
 
 
     def fill_region(self):
-        self.solver.solve(steps=int(2e3))
+        sol = self.solver.solve(steps=int(2e3))
+        self.filled_points = sol[-1][:self.n_bodies]
         self.visualize()
-        self.solver.animate(out="anim.gif")
-
+        plt.show()
 
 
 # Mesh Class
@@ -255,49 +262,50 @@ class SquareMesh:
 
         self.static_regions[square].points = static_points
                     
+    
+    def pt_in_array(self, pt, arr):
+        return any(np.allclose(pt, arr_p) for arr_p in arr)
+    
+
+    def pt_outside(self, pt, poly):
+        return (not poly.contains(pt)) and poly.distance(pt) > 1e-7
 
 
-    def dynamic_region(self, s1: Square, s2: Square):
-        boundary_points = []
-        intersection = s1.mesh.intersection(s2.mesh)
-        mesh = intersection
+    def create_dynamic_region(self, s1: Square, s2: Square, intersect_points: list[Point]):
+        boundary_points = intersect_points
+        s1_overlapping = s1.points[[not self.pt_in_array(pt, self.static_regions[s1].points) for pt in s1.points]]
+        s2_overlapping = s2.points[[not self.pt_in_array(pt, self.static_regions[s2].points) for pt in s2.points]]
+        overlapping = np.vstack([s1_overlapping, s2_overlapping])
 
-        s1_overlapping = s1.points[[intersection.distance(Point(pt)) < 1e-7 for pt in s1.points]]
-        s2_overlapping = s2.points[[intersection.distance(Point(pt)) < 1e-7 for pt in s2.points]]
+        for pt in overlapping:
+            squares = [s1, s2]
+            for s in squares:
+                if self.pt_in_array(pt, s.points):
+                    ri, rj = s.find_in_row(pt)
+                    ci, cj = s.find_in_col(pt)
 
-        for pt in s1_overlapping:
-            ri, rj = s1.find_in_row(pt)
-            ci, cj = s1.find_in_col(pt)
+                    candidates = [
+                        s.rows[ri][min(rj+1, len(s.rows[ri]) - 1)], s.rows[ri][max(0, rj-1)],
+                        s.cols[ci][min(cj+1, len(s.cols[ci]) - 1)], s.cols[ci][max(0, cj-1)],
+                    ]
 
-            if rj + 1 < len(s1.rows[ri]) - 1 and not intersection.contains(Point(s1.rows[ri][rj+1])):
-                boundary_points.append(s1.rows[ri][rj+1])
-            if rj > 0 and not intersection.contains(Point(s1.rows[ri][rj-1])):
-                boundary_points.append(s1.rows[ri][rj-1])
-            if cj + 1 < len(s1.rows[ri]) - 1 and not intersection.contains(Point(s1.cols[ci][cj+1])):
-                boundary_points.append(s1.cols[ci][cj+1])
-            if cj > 0 and not intersection.contains(Point(s1.cols[ci][cj-1])):
-                boundary_points.append(s1.cols[ci][cj-1])
+                    for cand in candidates:
+                        if self.pt_in_array(cand, self.static_regions[s].points):
+                            boundary_points = np.append(boundary_points, [cand], axis=0)
 
-        for pt in s2_overlapping:
-            ri, rj = s2.find_in_row(pt)
-            ci, cj = s2.find_in_col(pt)
+        #plt.scatter(self.static_regions[s2].points[:, 0], self.static_regions[s2].points[:, 1], c='red', alpha=0.3)
+        #plt.scatter(s2_overlapping[:, 0], s2_overlapping[:, 1], c='blue', alpha=0.3)
+        #plt.scatter(boundary_points[:, 0], boundary_points[:, 1], c='red')
+        #plt.show()
+        #quit()
 
-            if rj + 1 < len(s2.rows[ri]) - 1 and not intersection.contains(Point(s2.rows[ri][rj+1])):
-                boundary_points.append(s2.rows[ri][rj+1])
-            if rj > 0 and not intersection.contains(Point(s2.rows[ri][rj-1])):
-                boundary_points.append(s2.rows[ri][rj-1])
-            if cj + 1 < len(s2.rows[ri]) - 1 and not intersection.contains(Point(s2.cols[ci][cj+1])):
-                boundary_points.append(s2.cols[ci][cj+1])
-            if cj > 0 and not intersection.contains(Point(s2.cols[ci][cj-1])):
-                boundary_points.append(s2.cols[ci][cj-1])
-
-        boundary_points = np.array(boundary_points)
-        return DynamicRegion(boundary_points=boundary_points, mesh=mesh)
-
+        return DynamicRegion(boundary_points=boundary_points, n_bodies = s1_overlapping.shape[0])
 
 
     def add_square(self, s_new: Square):
         self.intersections[s_new] = []
+        self.static_regions[s_new] = StaticRegion(s_new.points)
+
         for s in self.squares:
             edges1 = s.mesh.exterior
             edges2 = s_new.mesh.exterior
@@ -312,11 +320,10 @@ class SquareMesh:
                 self.intersections[s].append(s_new)
                 self.intersections[s_new].append(s)
                 self.update_static_regions(s)
-                self.dynamic_regions.append(self.dynamic_region(s, s_new))
+                self.update_static_regions(s_new)
+                self.dynamic_regions.append(self.create_dynamic_region(s, s_new, points))
         
         self.squares.append(s_new)
-        self.static_regions[s_new] = StaticRegion(s_new.points)
-        self.update_static_regions(s_new)
 
 
 if __name__ == "__main__":
