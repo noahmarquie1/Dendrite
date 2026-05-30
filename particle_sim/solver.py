@@ -1,7 +1,7 @@
 import numpy as np
 from particle_sim.animations import AnimationHandler
 from scipy.integrate import RK45
-from mesh_generation.geometry import sample_sdf, generate_sdf
+from geometry.base_geometry import sample_sdf, generate_sdf
 import matplotlib.pyplot as plt
 import shapely
 import jax
@@ -23,7 +23,7 @@ class PointCloudSolver:
 
         # Physics and JAX Setup
         L = np.sqrt((polygon.bounds[2] - polygon.bounds[0])**2 + (polygon.bounds[3] - polygon.bounds[1])**2)
-        alpha = 5
+        alpha = 100
         beta = 1e3
 
         self.vel_threshold = 0.05 * L
@@ -67,7 +67,7 @@ class PointCloudSolver:
 
         dist_sq = dist ** 2    
         mag = (dist_sq + 1e-7) ** -3
-        force = -mag * R * normal
+        force = -mag * R * normal * 0.05
         return force
 
 

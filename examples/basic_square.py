@@ -4,7 +4,6 @@ from mesh_generation.mesh import Mesh
 import numpy as np
 from data.poly_management import load_polygon, save_polygon
 import matplotlib.pyplot as plt
-from cli.cli import handle_extrude
 
 DPI = 75
 N_BODIES = 100

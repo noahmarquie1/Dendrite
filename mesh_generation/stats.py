@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from mesh_generation.geometry import fetch_neighbors
+from geometry.base_geometry import fetch_neighbors
 
 
 def _calculate_pdf_data(mesh_points, approx_step, bin_amt):

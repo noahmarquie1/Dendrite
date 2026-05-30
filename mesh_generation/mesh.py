@@ -4,7 +4,7 @@ from shapely.plotting import plot_polygon
 from shapely import unary_union
 import matplotlib.pyplot as plt
 from hexalattice.hexalattice import create_hex_grid
-from mesh_generation.geometry import make_line
+from geometry.base_geometry import make_line
 from mesh_generation.stats import plot_mesh_pdf
 from data.poly_management import save_polygon, load_polygon
 import os

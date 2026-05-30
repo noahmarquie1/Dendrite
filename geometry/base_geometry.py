@@ -121,23 +121,6 @@ def make_line(p1, p2, num_steps):
     return points
 
 
-def make_square_edges(s, step_size):
-    total_points = np.array([]).reshape(0, 2)
-    s = np.append(s, [s[0]], axis=0)
-    for i in range(s.shape[0] - 1):
-        total_points = np.append(total_points, make_line(s[i], s[i+1], step_size), axis=0)
-    return total_points
-
-
-def fill_in_square(s, step_size):
-    # travel from edge 1 to edge 3, using known length and direction of edge 4
-    start_points = make_line(s[0], s[1], step_size)
-    in_area_points = np.array([]).reshape(0, 2)
-    for point in start_points:
-        in_area_points = np.append(in_area_points, make_line(point, point + (s[3] - s[0]), step_size), axis=0)
-    return in_area_points
-
-
 def fetch_neighbors(p, mesh_points, n):
     tree = KDTree(mesh_points)
     neighbor_distances, neighbor_indices = tree.query(p, k=n)

@@ -19,7 +19,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mesh_generation", "particle_sim", "cli", "data"]
+include = ["mesh_generation", "particle_sim", "cli", "data", "geometry"]
 
 [project.scripts]
 dendrite = "cli.cli:main"
